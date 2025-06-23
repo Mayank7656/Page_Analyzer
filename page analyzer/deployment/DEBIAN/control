@@ -1,0 +1,11 @@
+Package: ai-analytics
+Version: 1.0.0
+Section: web
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.8), python3-pip, python3-venv, nginx, apache2-utils
+Maintainer: Your Name <your.email@example.com>
+Description: AI Analytics Web Application
+ A web application for AI-powered analytics and reporting.
+ This package includes all necessary files and configurations
+ for running the application on Ubuntu/Debian systems. 

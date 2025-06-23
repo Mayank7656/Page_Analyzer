@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard - PDF Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .session-card {
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .session-card:hover {
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .session-card.active {
+            border-color: #007bff;
+            box-shadow: 0 0 15px rgba(0,123,255,0.3);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .session-info {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+        }
+        .session-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .stat-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .session-block {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem;
+            background-color: white;
+        }
+        .session-header {
+            margin-bottom: 0.5rem;
+        }
+        .overview-chart-container {
+            height: 400px;
+            margin-bottom: 2rem;
+        }
+        .user-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .device-info, .location-info {
+            line-height: 1.8;
+        }
+        .device-info i, .location-info i {
+            width: 20px;
+            color: #6c757d;
+        }
+        .session-block {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .session-header {
+            margin-bottom: 15px;
+        }
+        .chart-container {
+            height: 300px;
+            margin: 20px 0;
+        }
+        .session-stats {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .session-stats h6 {
+            margin-top: 5px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .user-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .device-info, .location-info {
+            padding: 10px;
+        }
+        .device-info h6, .location-info h6 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .device-info i, .location-info i {
+            margin-right: 8px;
+            color: #6c757d;
+        }
+        .session-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .session-stats {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .session-stats h6 {
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        .session-stats h4 {
+            color: #007bff;
+            font-weight: bold;
+        }
+        .session-meta {
+            margin-top: 10px;
+        }
+        .session-meta .badge {
+            margin-right: 5px;
+            padding: 8px 12px;
+        }
+        .session-block {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem;
+            background-color: white;
+        }
+        .session-header {
+            margin-bottom: 0.5rem;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 0.25rem;
+            min-width: 80px;
+            text-align: center;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+        }
+        .session-stats {
+            flex-wrap: nowrap;
+        }
+        .session-stats .stat-card {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>PDF Analytics Dashboard</h2>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                Upload New PDF
+            </button>
+        </div>
+
+        <!-- Session Analysis Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Session Analysis</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label for="sessionPdfSelect">Select PDF:</label>
+                                <select id="sessionPdfSelect" class="form-control" onchange="loadPdfSessions(this.value)">
+                                    <option value="">Select a PDF...</option>
+                                    {% for pdf in pdfs %}
+                                    <option value="{{ pdf.unique_url }}">{{ pdf.original_filename }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="startDate">Start Date:</label>
+                                <input type="date" id="startDate" class="form-control" onchange="applyDateFilter()">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="endDate">End Date:</label>
+                                <input type="date" id="endDate" class="form-control" onchange="applyDateFilter()">
+                            </div>
+                        </div>
+
+                        <!-- Overview Chart -->
+                        <div class="overview-chart-container">
+                            <canvas id="overviewChart"></canvas>
+                        </div>
+
+                        <!-- Sessions Container -->
+                        <div id="sessionsContainer">
+                            <!-- Session blocks will be added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF URLs Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Available PDFs</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Original Filename</th>
+                                        <th>View URL</th>
+                                        <th>Created At</th>
+                                        <th>Statistics</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for pdf in pdfs %}
+                                    <tr data-pdf-url="{{ pdf.unique_url }}">
+                                        <td>
+                                            <a href="{{ pdf.admin_view_url }}" target="_blank" style="color: #007bff; text-decoration: underline; cursor: pointer;">
+                                                {{ pdf.original_filename }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" value="{{ pdf.view_url }}" readonly>
+                                                <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('{{ pdf.view_url }}')">
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td>{{ pdf.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td>
+                                            <div class="small">
+                                                <div>Sessions: {{ pdf.total_sessions or 0 }}</div>
+                                                <div>Views: {{ pdf.total_views or 0 }}</div>
+                                                <div>Duration: {{ "%.1f"|format(pdf.total_duration or 0) }}s</div>
+                                                <div>Unique Pages: {{ pdf.unique_pages or 0 }}</div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-danger btn-sm" onclick="deletePDF('{{ pdf.unique_url }}')">Delete</button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Session Analytics</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- PDF Selection -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="analyticsPdfSelect">Select PDF:</label>
+                                <select id="analyticsPdfSelect" class="form-control" onchange="loadSessionAnalytics(this.value)">
+                                    <option value="">Select a PDF...</option>
+                                    {% for pdf in pdfs %}
+                                    <option value="{{ pdf.unique_url }}">{{ pdf.original_filename }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Sessions Container -->
+                        <div id="sessionsAnalytics">
+                            <!-- Session Selection Dropdown -->
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="sessionSelect">Select Session:</label>
+                                    <select id="sessionSelect" class="form-control" onchange="displaySelectedSession(this.value)">
+                                        <option value="">Select a session...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Individual Session Display -->
+                            <div id="selectedSessionAnalytics">
+                                <!-- Selected session details will be shown here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload PDF</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="uploadForm">
+                        <div class="mb-3">
+                            <label for="pdfFile" class="form-label">Select PDF File</label>
+                            <input type="file" class="form-control" id="pdfFile" accept=".pdf" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Card Template -->
+    <template id="sessionCardTemplate">
+        <div class="col-md-6 mb-4">
+            <div class="card session-card">
+                <div class="card-header">
+                    <h5 class="session-title">Session</h5>
+                    <span class="badge session-status"></span>
+                </div>
+                <div class="card-body">
+                    <!-- Session Info -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Start Time:</strong> <span class="session-start"></span></p>
+                            <p><strong>Duration:</strong> <span class="session-duration"></span></p>
+                            <p><strong>Pages Viewed:</strong> <span class="session-pages"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Device:</strong> <span class="session-device"></span></p>
+                            <p><strong>Browser:</strong> <span class="session-browser"></span></p>
+                            <p><strong>OS:</strong> <span class="session-os"></span></p>
+                        </div>
+                    </div>
+
+                    <!-- Session Charts -->
+                    <div class="session-charts">
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#pageTime" role="tab">Page Time</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#scrollDepth" role="tab">Scroll Depth</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#pageFlow" role="tab">Page Flow</a>
+                            </li>
+                        </ul>
+                        <div class="tab-content mt-3">
+                            <div class="tab-pane fade show active" id="pageTime" role="tabpanel">
+                                <canvas class="page-time-chart"></canvas>
+                            </div>
+                            <div class="tab-pane fade" id="scrollDepth" role="tabpanel">
+                                <canvas class="scroll-depth-chart"></canvas>
+                            </div>
+                            <div class="tab-pane fade" id="pageFlow" role="tabpanel">
+                                <canvas class="page-flow-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add this at the beginning of your script section
+        // Fallback cache implementation using localStorage
+        const localStorageCache = {
+            async get(key) {
+                try {
+                    const item = localStorage.getItem(key);
+                    if (!item) return null;
+                    
+                    const { value, expiry } = JSON.parse(item);
+                    if (expiry && Date.now() > expiry) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return value;
+                } catch (e) {
+                    console.warn('LocalStorage cache get failed:', e);
+                    return null;
+                }
+            },
+            
+            async set(key, value, ttl = null) {
+                try {
+                    const item = {
+                        value: value,
+                        expiry: ttl ? Date.now() + (ttl * 1000) : null
+                    };
+                    localStorage.setItem(key, JSON.stringify(item));
+                    return true;
+                } catch (e) {
+                    console.warn('LocalStorage cache set failed:', e);
+                    return false;
+                }
+            }
+        };
+
+        // Cache implementation that tries Cache API first, falls back to localStorage
+        const cacheStore = {
+            async get(key) {
+                try {
+                    if (window.caches) {
+                        const cache = await caches.open('pdf-analytics');
+                        const response = await cache.match(new Request(key));
+                        if (response) {
+                            return await response.json();
+                        }
+                    }
+                    return await localStorageCache.get(key);
+                } catch (e) {
+                    console.warn('Cache get failed, using localStorage:', e);
+                    return await localStorageCache.get(key);
+                }
+            },
+            
+            async set(key, value, ttl = null) {
+                try {
+                    if (window.caches) {
+                        const cache = await caches.open('pdf-analytics');
+                        const response = new Response(JSON.stringify(value));
+                        await cache.put(new Request(key), response);
+                        return true;
+                    }
+                    return await localStorageCache.set(key, value, ttl);
+                } catch (e) {
+                    console.warn('Cache set failed, using localStorage:', e);
+                    return await localStorageCache.set(key, value, ttl);
+                }
+            }
+        };
+
+        // Function to copy URL to clipboard
+        function copyToClipboard(text) {
+            // Get fresh URL before copying
+            const row = document.querySelector(`input[value="${text}"]`).closest('tr');
+            const pdfUrl = row.dataset.pdfUrl;
+            
+            fetch('/list-pdfs')
+                .then(response => response.json())
+                .then(pdfs => {
+                    const pdf = pdfs.find(p => p.unique_url === pdfUrl);
+                    if (pdf) {
+                        // Try using the modern clipboard API first
+                        if (navigator.clipboard && window.isSecureContext) {
+                            navigator.clipboard.writeText(pdf.view_url).then(() => {
+                                alert('URL copied to clipboard!');
+                            }).catch(() => {
+                                // Fallback for clipboard API failure
+                                fallbackCopyToClipboard(pdf.view_url);
+                            });
+                        } else {
+                            // Fallback for non-secure contexts
+                            fallbackCopyToClipboard(pdf.view_url);
+                        }
+                        // Update the displayed URL
+                        const urlInput = row.querySelector('input[type="text"]');
+                        if (urlInput) {
+                            urlInput.value = pdf.view_url;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error getting fresh URL:', error);
+                    fallbackCopyToClipboard(text);
+                });
+        }
+
+        // Fallback copy method using temporary textarea
+        function fallbackCopyToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            
+            // Avoid scrolling to bottom
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                alert('URL copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy URL. Please try selecting and copying manually.');
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        // Function to delete PDF
+        function deletePDF(uniqueUrl) {
+            if (confirm('Are you sure you want to delete this PDF?')) {
+                fetch(`/delete-pdf/${uniqueUrl}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === "PDF deleted successfully") {
+                        // Find and remove the row from the table
+                        const row = document.querySelector(`tr[data-pdf-url="${uniqueUrl}"]`);
+                        if (row) {
+                            row.remove();
+                        }
+                        
+                        // Also remove from the PDF select dropdowns
+                        const pdfSelects = document.querySelectorAll('select option[value="' + uniqueUrl + '"]');
+                        pdfSelects.forEach(option => option.remove());
+                        
+                        // Clear any active analytics if the deleted PDF was being viewed
+                        const analyticsContainer = document.getElementById('sessionsAnalytics');
+                        if (analyticsContainer && document.getElementById('analyticsPdfSelect').value === uniqueUrl) {
+                            analyticsContainer.innerHTML = '<div class="alert alert-info">Please select a PDF to view analytics</div>';
+                        }
+                        
+                        // Clear any active sessions if the deleted PDF was being viewed
+                        const sessionsContainer = document.getElementById('sessionsContainer');
+                        if (sessionsContainer && document.getElementById('sessionPdfSelect').value === uniqueUrl) {
+                            sessionsContainer.innerHTML = '<div class="alert alert-info">Please select a PDF to view sessions</div>';
+                            if (overviewChart) {
+                                overviewChart.destroy();
+                                overviewChart = null;
+                            }
+                        }
+                    } else {
+                        alert('Error deleting PDF: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting PDF. Please try again.');
+                });
+            }
+        }
+
+        // Handle file upload
+        document.getElementById('uploadButton').addEventListener('click', function() {
+            const fileInput = document.getElementById('pdfFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/upload-pdf', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === "File uploaded successfully") {
+                    location.reload();
+                } else {
+                    alert('Error uploading file: ' + data.message);
+                }
+            });
+        });
+
+        // Initialize chart variables
+        let overviewChart = null;
+        const sessionCharts = new Map();
+        const sessionColors = new Map(); // Store colors for each session
+
+        // Helper function to format duration
+        function formatDuration(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}m ${remainingSeconds}s`;
+        }
+
+        // Helper function to get consistent color for a session
+        function getSessionColor(sessionId) {
+            if (!sessionColors.has(sessionId)) {
+                const letters = '0123456789ABCDEF';
+                let color = '#';
+                for (let i = 0; i < 6; i++) {
+                    color += letters[Math.floor(Math.random() * 16)];
+                }
+                sessionColors.set(sessionId, color);
+            }
+            return sessionColors.get(sessionId);
+        }
+
+        function loadPdfSessions(pdfUrl) {
+            if (!pdfUrl) {
+                // Clear previous sessions and charts
+                document.getElementById('sessionsContainer').innerHTML = '';
+                if (overviewChart) {
+                    overviewChart.destroy();
+                    overviewChart = null;
+                }
+                // Clear all session charts
+                sessionCharts.forEach((chart, id) => {
+                    chart.destroy();
+                });
+                sessionCharts.clear();
+                sessionColors.clear(); // Clear session colors
+                return;
+            }
+
+            // Show loading message
+            document.getElementById('sessionsContainer').innerHTML = '<div class="alert alert-info">Loading sessions...</div>';
+            
+            // Clear previous chart
+            if (overviewChart) {
+                overviewChart.destroy();
+                overviewChart = null;
+            }
+            // Clear all session charts
+            sessionCharts.forEach((chart, id) => {
+                chart.destroy();
+            });
+            sessionCharts.clear();
+            sessionColors.clear(); // Clear session colors
+
+            // Get date range
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            fetch(`/get-sessions/${pdfUrl}?start=${startDate}&end=${endDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Small delay to ensure DOM is ready
+                    setTimeout(() => {
+                        displaySessionData(data);
+                    }, 100);
+                })
+                .catch(error => {
+                    console.error('Error loading sessions:', error);
+                    document.getElementById('sessionsContainer').innerHTML = `
+                        <div class="alert alert-danger">
+                            Error loading sessions: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+
+        function displaySessionData(data) {
+            const container = document.getElementById('sessionsContainer');
+            container.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">No sessions found for this PDF.</div>';
+                return;
+            }
+
+            try {
+                // Create overview data
+                const allPages = new Set();
+                data.forEach(session => {
+                    if (session.page_durations) {
+                        Object.keys(session.page_durations).forEach(page => allPages.add(parseInt(page)));
+                    }
+                });
+                const sortedPages = Array.from(allPages).sort((a, b) => a - b);
+
+                // Create overview chart
+                const overviewCanvas = document.getElementById('overviewChart');
+                if (!overviewCanvas) {
+                    throw new Error('Overview chart canvas not found');
+                }
+
+                // Create a new canvas element to replace the old one
+                const newCanvas = document.createElement('canvas');
+                newCanvas.id = 'overviewChart';
+                newCanvas.style.width = '100%';
+                newCanvas.style.height = '400px';
+                overviewCanvas.parentNode.replaceChild(newCanvas, overviewCanvas);
+
+                // Create overview chart
+                overviewChart = new Chart(newCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: sortedPages.map(page => `Page ${page}`),
+                        datasets: data.map((session, index) => ({
+                            label: `Session ${index + 1}`,
+                            data: sortedPages.map(page => session.page_durations[page] || 0),
+                            borderColor: getSessionColor(session.session_id),
+                            fill: false
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Page Number'
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Time Spent Per Page - All Sessions Overview'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 12
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Create individual session blocks
+                data.forEach((session, index) => {
+                    const sessionBlock = document.createElement('div');
+                    sessionBlock.className = 'session-block mb-4';
+                    const chartId = `chart-${session.session_id}`;
+                    
+                    // Format times and calculate duration
+                    const startTime = new Date(session.start_time);
+                    const endTime = session.end_time ? new Date(session.end_time) : new Date();
+                    const duration = (endTime - startTime) / 1000;
+
+                    // Calculate session statistics
+                    const pages = Object.keys(session.page_durations || {}).map(Number).sort((a, b) => a - b);
+                    const durations = pages.map(page => session.page_durations[page] || 0);
+                    const totalDuration = durations.reduce((a, b) => a + b, 0);
+                    const avgDuration = totalDuration / durations.length || 0;
+
+                    sessionBlock.innerHTML = `
+                        <div class="session-header">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h5 class="mb-1">Session ${index + 1}</h5>
+                                    <p class="text-muted mb-0 small">
+                                        Started: ${startTime.toLocaleString()}<br>
+                                        ${session.end_time ? `Ended: ${endTime.toLocaleString()}<br>Duration: ${formatDuration(duration)}<br>` : '<span class="text-danger">Session Active</span><br>'}
+                                        Email: ${session.email || 'Not provided'}
+                                    </p>
+                                </div>
+                                <div class="session-stats d-flex gap-2">
+                                    <div class="stat-card p-2">
+                                        <h6 class="mb-1 small">Pages</h6>
+                                        <p class="mb-0">${pages.length}</p>
+                                    </div>
+                                    <div class="stat-card p-2">
+                                        <h6 class="mb-1 small">Duration</h6>
+                                        <p class="mb-0">${formatDuration(totalDuration)}</p>
+                                    </div>
+                                    <div class="stat-card p-2">
+                                        <h6 class="mb-1 small">Avg/Page</h6>
+                                        <p class="mb-0">${formatDuration(avgDuration)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container mt-2" style="height: 200px;">
+                            <canvas id="${chartId}"></canvas>
+                        </div>
+                    `;
+                    container.appendChild(sessionBlock);
+
+                    // Create session chart
+                    const canvas = document.getElementById(chartId);
+                    if (canvas) {
+                        const chart = new Chart(canvas, {
+                            type: 'bar',
+                            data: {
+                                labels: pages.map(page => `Page ${page}`),
+                                datasets: [{
+                                    label: 'Time Spent (seconds)',
+                                    data: durations,
+                                    backgroundColor: getSessionColor(session.session_id)
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        title: {
+                                            display: true,
+                                            text: 'Seconds'
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                        sessionCharts.set(chartId, chart);
+                    }
+                });
+            } catch (error) {
+                console.error('Error displaying session data:', error);
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error displaying session data: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function getStatusColor(status) {
+            switch(status.toLowerCase()) {
+                case 'active': return 'success';
+                case 'completed': return 'primary';
+                case 'abandoned': return 'danger';
+                default: return 'secondary';
+            }
+        }
+
+        function applySorting() {
+            const pdfUrl = document.getElementById('pdfSelect').value;
+            if (pdfUrl) {
+                loadSessions(pdfUrl);
+            }
+        }
+
+        // Initialize date range to last 7 days
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date();
+            const lastWeek = new Date(today);
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            
+            if (startDateInput && endDateInput) {
+                startDateInput.value = lastWeek.toISOString().split('T')[0];
+                endDateInput.value = today.toISOString().split('T')[0];
+            }
+            
+            // Load initial state from URL
+            loadInitialStateFromUrl();
+        });
+
+        function applyDateFilter() {
+            const pdfUrl = document.getElementById('sessionPdfSelect').value;
+            if (pdfUrl) {
+                loadPdfSessions(pdfUrl);
+            }
+        }
+
+        let currentChart = null;
+        let activeSessionCard = null;
+
+        function loadSessions(pdfUrl) {
+            if (!pdfUrl) return;
+            
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            fetch(`/get-pdf-analytics/${pdfUrl}?start=${startDate}&end=${endDate}&sort=${sortBy}`)
+                .then(response => response.json())
+                .then(data => {
+                    displaySessions(data.session_analytics);
+                })
+                .catch(error => console.error('Error loading sessions:', error));
+        }
+
+        function displaySessions(sessions) {
+            const grid = document.getElementById('sessionsGrid');
+            grid.innerHTML = '';
+            sessionCharts.clear();
+            
+            sessions.forEach(session => {
+                const card = createSessionCard(session);
+                grid.appendChild(card);
+                createSessionCharts(session);
+            });
+        }
+
+        function createSessionCard(session) {
+            const template = document.getElementById('sessionCardTemplate');
+            const card = template.content.cloneNode(true);
+            
+            // Set session info
+            card.querySelector('.session-title').textContent = `Session ${session.session_id}`;
+            card.querySelector('.session-status').textContent = session.status;
+            card.querySelector('.session-status').classList.add(session.status.toLowerCase());
+            
+            card.querySelector('.session-start').textContent = session.formatted_start_time;
+            card.querySelector('.session-duration').textContent = `${session.total_duration.toFixed(2)}s`;
+            card.querySelector('.session-pages').textContent = session.total_views;
+            
+            card.querySelector('.session-device').textContent = session.device_type;
+            card.querySelector('.session-browser').textContent = session.browser;
+            card.querySelector('.session-os').textContent = session.operating_system;
+            
+            // Set unique IDs for charts
+            const chartIds = {
+                pageTime: `pageTime-${session.session_id}`,
+                scrollDepth: `scrollDepth-${session.session_id}`,
+                pageFlow: `pageFlow-${session.session_id}`
+            };
+            
+            card.querySelector('.page-time-chart').id = chartIds.pageTime;
+            card.querySelector('.scroll-depth-chart').id = chartIds.scrollDepth;
+            card.querySelector('.page-flow-chart').id = chartIds.pageFlow;
+            
+            return card;
+        }
+
+        function createSessionCharts(session) {
+            // Page Time Chart
+            new Chart(document.getElementById(`pageTime-${session.session_id}`), {
+                type: 'bar',
+                data: {
+                    labels: session.page_views.map(v => `Page ${v.page_number}`),
+                    datasets: [{
+                        label: 'Time Spent (seconds)',
+                        data: session.page_views.map(v => v.duration),
+                        backgroundColor: '#007bff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Seconds'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Scroll Depth Chart
+            new Chart(document.getElementById(`scrollDepth-${session.session_id}`), {
+                type: 'line',
+                data: {
+                    labels: session.page_views.map(v => `Page ${v.page_number}`),
+                    datasets: [{
+                        label: 'Scroll Depth (%)',
+                        data: session.page_views.map(v => v.scroll_depth * 100),
+                        borderColor: '#28a745',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Scroll Depth (%)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Page Flow Chart
+            new Chart(document.getElementById(`pageFlow-${session.session_id}`), {
+                type: 'line',
+                data: {
+                    labels: session.page_views.map((v, i) => i + 1),
+                    datasets: [{
+                        label: 'Page Number',
+                        data: session.page_views.map(v => v.page_number),
+                        borderColor: '#dc3545',
+                        fill: false,
+                        stepped: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Page Number'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'View Sequence'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadSessionAnalytics(pdfUrl) {
+            if (!pdfUrl) return;
+            
+            const container = document.getElementById('sessionsAnalytics');
+            const sessionSelect = document.getElementById('sessionSelect');
+            const selectedSessionAnalytics = document.getElementById('selectedSessionAnalytics');
+            
+            container.querySelector('.row').style.display = 'none'; // Hide dropdown initially
+            selectedSessionAnalytics.innerHTML = '<div class="alert alert-info">Loading analytics...</div>';
+            
+            fetch(`/get-session-analytics/${pdfUrl}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Show dropdown
+                    container.querySelector('.row').style.display = 'flex';
+                    
+                    // Populate session dropdown
+                    sessionSelect.innerHTML = '<option value="">Select a session...</option>';
+                    if (data.sessions && data.sessions.length > 0) {
+                        data.sessions.forEach((session, index) => {
+                            const option = document.createElement('option');
+                            option.value = index;
+                            option.textContent = `Session ${index + 1} - ${session.start_time} (${session.device_type})`;
+                            sessionSelect.appendChild(option);
+                        });
+                        selectedSessionAnalytics.innerHTML = '<div class="alert alert-info">Please select a session from the dropdown above.</div>';
+                    } else {
+                        selectedSessionAnalytics.innerHTML = '<div class="alert alert-info">No sessions found for this PDF.</div>';
+                    }
+                    
+                    // Store sessions data for later use
+                    window.sessionsData = data.sessions;
+                })
+                .catch(error => {
+                    console.error('Error loading analytics:', error);
+                    selectedSessionAnalytics.innerHTML = '<div class="alert alert-danger">Error loading analytics</div>';
+                });
+        }
+
+        function displaySelectedSession(sessionIndex) {
+            if (!sessionIndex || !window.sessionsData) return;
+            
+            const session = window.sessionsData[sessionIndex];
+            const container = document.getElementById('selectedSessionAnalytics');
+            
+            // Format times
+            const startTime = new Date(session.start_time);
+            const endTime = session.end_time ? new Date(session.end_time) : new Date();
+            const duration = (endTime - startTime) / 1000;
+
+            // Calculate statistics
+            const pages = session.page_views.map(v => v.page_number);
+            const durations = session.page_views.map(v => v.duration);
+            const totalDuration = durations.reduce((a, b) => a + b, 0);
+            const avgDuration = totalDuration / durations.length || 0;
+            
+            // Generate HTML for selected session
+            let html = `
+                <div class="session-block mb-4">
+                    <div class="session-header">
+                        <h5>Session Details</h5>
+                    </div>
+                    
+                    <div class="user-info mb-3">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="email-info">
+                                    <h6><i class="fas fa-envelope"></i> User Information</h6>
+                                    <div><strong>Email:</strong> ${session.email || 'Not provided'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="session-info mb-3">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Start Time:</strong> ${startTime.toLocaleString()}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>End Time:</strong> ${session.end_time ? endTime.toLocaleString() : 'Active'}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Total Duration:</strong> ${formatDuration(duration)}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="session-stats mb-3">
+                        <div class="row text-center">
+                            <div class="col">
+                            <h6>Total Views</h6>
+                            <h4>${session.statistics.total_views}</h4>
+                        </div>
+                            <div class="col">
+                            <h6>Average Duration</h6>
+                            <h4>${session.statistics.avg_duration.toFixed(1)}s</h4>
+                        </div>
+                            <div class="col">
+                            <h6>Unique Pages</h6>
+                            <h4>${session.unique_pages}</h4>
+                            </div>
+                            <div class="col">
+                                <h6>Session Duration</h6>
+                                <h4>${formatDuration(duration)}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Page Views Chart -->
+                    <div class="chart-container mb-4">
+                        <canvas id="pageViewsChart"></canvas>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Create the chart
+            const ctx = document.getElementById('pageViewsChart');
+            if (ctx) {
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                        labels: pages.map(v => `Page ${v}`),
+                    datasets: [{
+                        label: 'Time Spent (seconds)',
+                            data: durations,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Duration (seconds)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Page View Duration Analysis'
+                        }
+                    }
+                }
+            });
+            }
+        }
+
+        // Add these functions at the beginning of the script section
+        function updateUrlWithPdfSelection(pdfUrl) {
+            if (pdfUrl) {
+                const url = new URL(window.location);
+                url.searchParams.set('pdf', pdfUrl);
+                window.history.pushState({}, '', url);
+            } else {
+                const url = new URL(window.location);
+                url.searchParams.delete('pdf');
+                window.history.pushState({}, '', url);
+            }
+        }
+
+        function loadInitialStateFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pdfUrl = urlParams.get('pdf');
+            if (pdfUrl) {
+                // Set the select element value
+                const pdfSelect = document.getElementById('sessionPdfSelect');
+                if (pdfSelect) {
+                    pdfSelect.value = pdfUrl;
+                    // Load the sessions for this PDF
+                    loadPdfSessions(pdfUrl);
+                }
+
+                // Also set the analytics select if it exists
+                const analyticsPdfSelect = document.getElementById('analyticsPdfSelect');
+                if (analyticsPdfSelect) {
+                    analyticsPdfSelect.value = pdfUrl;
+                    loadSessionAnalytics(pdfUrl);
+                }
+            }
+        }
+
+        // Modify the existing event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... existing DOMContentLoaded code ...
+            
+            // Load initial state from URL
+            loadInitialStateFromUrl();
+
+            // Add change event listeners to update URL
+            const sessionPdfSelect = document.getElementById('sessionPdfSelect');
+            if (sessionPdfSelect) {
+                sessionPdfSelect.addEventListener('change', (e) => {
+                    updateUrlWithPdfSelection(e.target.value);
+                    loadPdfSessions(e.target.value);
+                });
+            }
+
+            const analyticsPdfSelect = document.getElementById('analyticsPdfSelect');
+            if (analyticsPdfSelect) {
+                analyticsPdfSelect.addEventListener('change', (e) => {
+                    updateUrlWithPdfSelection(e.target.value);
+                    loadSessionAnalytics(e.target.value);
+                });
+            }
+        });
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', () => {
+            loadInitialStateFromUrl();
+        });
+
+        // Add this function at the beginning of your script section
+        function refreshPdfUrls() {
+            fetch('/list-pdfs')
+                .then(response => response.json())
+                .then(pdfs => {
+                    pdfs.forEach(pdf => {
+                        const row = document.querySelector(`tr[data-pdf-url="${pdf.unique_url}"]`);
+                        if (row) {
+                            const urlInput = row.querySelector('input[type="text"]');
+                            if (urlInput) {
+                                urlInput.value = pdf.view_url;
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error refreshing URLs:', error));
+        }
+
+        // Add auto-refresh functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initial load
+            refreshPdfUrls();
+
+            // Refresh URLs every time the page gains focus
+            window.addEventListener('focus', refreshPdfUrls);
+
+            // Refresh URLs every time the page becomes visible
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    refreshPdfUrls();
+                }
+            });
+
+            // Refresh URLs periodically (every 30 seconds)
+            setInterval(refreshPdfUrls, 30000);
+
+            // Add refresh button functionality
+            const refreshButton = document.createElement('button');
+            refreshButton.className = 'btn btn-outline-secondary ms-2';
+            refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh URLs';
+            refreshButton.onclick = refreshPdfUrls;
+            
+            // Add the refresh button next to the upload button
+            const uploadButton = document.querySelector('[data-bs-target="#uploadModal"]');
+            if (uploadButton) {
+                uploadButton.parentNode.insertBefore(refreshButton, uploadButton.nextSibling);
+            }
+        });
+    </script>
+</body>
+</html> 

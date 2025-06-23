@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PDF Viewer - {{ original_filename }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 10px; 
+            font-family: Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            background: #f5f5f5;
+        }
+        #pdf-container { 
+            width: 100%; 
+            height: 80vh; 
+            position: relative;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .loading-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .loading { 
+            text-align: center; 
+            padding: 20px;
+            font-size: 16px;
+            color: #666;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .error { 
+            color: red; 
+            text-align: center; 
+            padding: 20px;
+            font-size: 16px;
+            background: white;
+            border-radius: 8px;
+            margin: 20px;
+        }
+        .navigation { 
+            position: fixed; 
+            bottom: 20px; 
+            left: 50%; 
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 90%;
+            max-width: 300px;
+        }
+        .page-info {
+            display: inline-block;
+            margin: 0 15px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .btn {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            font-size: 14px;
+            min-width: 60px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto !important;
+            display: block;
+            margin: 0 auto;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            .navigation {
+                bottom: 10px;
+                padding: 8px;
+            }
+            .btn {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            .page-info {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="pdf-container"></div>
+    <div class="loading-overlay">
+        <div class="loading">Loading PDF...</div>
+    </div>
+    <div class="navigation">
+        <button class="btn" id="prevPage" disabled>Previous</button>
+        <span class="page-info">Page <span id="currentPage">1</span> of <span id="totalPages">0</span></span>
+        <button class="btn" id="nextPage" disabled>Next</button>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        let pdfDoc = null;
+        let currentPage = 1;
+        let pageViews = new Map();
+        let startTime = new Date();
+        let currentPageStartTime = new Date();
+        let viewingSessionId = {{ viewing_session_id }};
+        let firstPageViewed = false;
+        let visitedPages = new Set();
+        let pageTimers = new Map();
+        let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        let isLoading = false;
+        
+        console.log('Initial viewing session ID:', viewingSessionId);
+        console.log('Is mobile device:', isMobile);
+        
+        function showLoading() {
+            document.querySelector('.loading-overlay').classList.add('active');
+            isLoading = true;
+        }
+        
+        function hideLoading() {
+            document.querySelector('.loading-overlay').classList.remove('active');
+            isLoading = false;
+        }
+        
+        function updateLoadingProgress(percent) {
+            const loadingText = document.querySelector('.loading');
+            loadingText.textContent = `Loading PDF... ${percent}%`;
+        }
+        
+        // Function to get the server URL
+        function getServerUrl() {
+            const currentUrl = window.location.href;
+            const serverUrl = currentUrl.split('/view-pdf/')[0];
+            return serverUrl;
+        }
+        
+        // Load the PDF
+        const pdfUrl = "{{ filename }}";
+        console.log('Loading PDF from URL:', pdfUrl);
+        
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryDelay = 2000;
+        
+        function loadPDF(url, retryAttempt = 0) {
+            console.log(`Attempting to load PDF (attempt ${retryAttempt + 1}/${maxRetries})`);
+            
+            showLoading();
+            
+            const loadingTask = pdfjsLib.getDocument({
+                url: url,
+                withCredentials: false,
+                cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+                cMapPacked: true,
+                disableStream: false,
+                disableAutoFetch: false,
+                maxImageSize: isMobile ? 1024 * 1024 * 5 : 1024 * 1024 * 10,
+                isEvalSupported: true,
+                useSystemFonts: true
+            });
+            
+            loadingTask.onProgress = function(progressData) {
+                if (progressData.total > 0) {
+                    const percent = Math.round((progressData.loaded / progressData.total) * 100);
+                    updateLoadingProgress(percent);
+                }
+            };
+            
+            loadingTask.promise.then(function(pdf) {
+                console.log('PDF loaded successfully');
+                pdfDoc = pdf;
+                document.getElementById('totalPages').textContent = pdf.numPages;
+                
+                document.getElementById('prevPage').disabled = currentPage <= 1;
+                document.getElementById('nextPage').disabled = currentPage >= pdf.numPages;
+                
+                hideLoading();
+                renderPage(currentPage);
+            }).catch(function(error) {
+                console.error('Error loading PDF:', error);
+                
+                if (retryAttempt < maxRetries - 1) {
+                    console.log(`Retrying in ${retryDelay/1000} seconds... (${retryAttempt + 1}/${maxRetries})`);
+                    updateLoadingProgress(`Error loading PDF. Retrying in ${retryDelay/1000} seconds...`);
+                    
+                    setTimeout(() => {
+                        loadPDF(url, retryAttempt + 1);
+                    }, retryDelay);
+                } else {
+                    let errorMessage = 'Error loading PDF: ';
+                    if (error.name === 'MissingPDFException') {
+                        errorMessage += 'The PDF file could not be found.';
+                    } else if (error.name === 'InvalidPDFException') {
+                        errorMessage += 'The PDF file is invalid or corrupted.';
+                    } else if (error.name === 'UnexpectedResponseException') {
+                        errorMessage += 'The server returned an unexpected response.';
+                    } else if (error.name === 'NetworkError') {
+                        errorMessage += 'Network error occurred while loading the PDF.';
+                    } else {
+                        errorMessage += error.message;
+                    }
+                    
+                    hideLoading();
+                    document.getElementById('pdf-container').innerHTML = `
+                        <div class="error">
+                            <p>${errorMessage}</p>
+                            <p>Please try refreshing the page or contact support if the problem persists.</p>
+                            <button class="btn" onclick="window.location.reload()">Retry</button>
+                        </div>`;
+                }
+            });
+        }
+        
+        function renderPage(pageNum) {
+            if (isLoading) return;
+            
+            console.log('Rendering page:', pageNum);
+            showLoading();
+            
+            if (pageTimers.has(currentPage)) {
+                clearInterval(pageTimers.get(currentPage));
+                pageTimers.delete(currentPage);
+            }
+            
+            if (pageViews.has(currentPage)) {
+                const endTime = new Date();
+                const duration = (endTime - currentPageStartTime) / 1000;
+                const currentPageData = pageViews.get(currentPage);
+                currentPageData.duration += duration;
+                
+                console.log('Updating previous page duration:', {
+                    page: currentPage,
+                    duration: duration,
+                    totalDuration: currentPageData.duration
+                });
+                
+                updatePageDuration(currentPage, currentPageData.duration);
+            }
+
+            currentPageStartTime = new Date();
+            if (!pageViews.has(pageNum)) {
+                pageViews.set(pageNum, {
+                    startTime: currentPageStartTime,
+                    duration: 0,
+                    scrollDepth: 0
+                });
+                console.log('New page view started:', pageNum);
+            }
+
+            const timer = setInterval(() => {
+                const currentTime = new Date();
+                const duration = (currentTime - currentPageStartTime) / 1000;
+                const currentPageData = pageViews.get(pageNum);
+                currentPageData.duration = duration;
+                
+                const scrollDepth = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+                currentPageData.scrollDepth = Math.max(currentPageData.scrollDepth, scrollDepth);
+                
+                updatePageDuration(pageNum, duration, currentPageData.scrollDepth);
+            }, 5000);
+            
+            pageTimers.set(pageNum, timer);
+
+            currentPage = pageNum;
+            document.getElementById('currentPage').textContent = pageNum;
+            
+            document.getElementById('prevPage').disabled = pageNum <= 1;
+            document.getElementById('nextPage').disabled = pageNum >= pdfDoc.numPages;
+
+            pdfDoc.getPage(pageNum).then(function(page) {
+                const container = document.getElementById('pdf-container');
+                container.innerHTML = '';
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                
+                const viewport = page.getViewport({
+                    scale: isMobile ? 1.0 : 1.5
+                });
+                
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                container.appendChild(canvas);
+                
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                
+                page.render(renderContext).promise.then(function() {
+                    hideLoading();
+                    const timeToFirstView = (Date.now() - startTime) / 1000;
+                    if (!visitedPages.has(pageNum)) {
+                        visitedPages.add(pageNum);
+                        console.log('Logging new page view:', {
+                            page: pageNum,
+                            timeToFirstView: timeToFirstView
+                        });
+                        logPageView(pageNum, 0, 0, 1.0, timeToFirstView, false);
+                    }
+                }).catch(function(error) {
+                    console.error('Error rendering page:', error);
+                    hideLoading();
+                });
+            }).catch(function(error) {
+                console.error('Error getting page:', error);
+                hideLoading();
+            });
+        }
+
+        // Start loading the PDF
+        loadPDF(pdfUrl);
+
+        // Track page views
+        function logPageView(pageNumber, duration, scrollDepth, zoomLevel, timeToFirstView, isComplete) {
+            console.log('Sending page view data:', {
+                sessionId: viewingSessionId,
+                page: pageNumber,
+                duration: duration,
+                isComplete: isComplete
+            });
+            
+            if (!viewingSessionId) {
+                console.error('No viewing session ID available');
+                return;
+            }
+            
+            const data = {
+                viewing_session_id: viewingSessionId,
+                pdf_id: "{{ pdf_id }}",
+                page: pageNumber,
+                duration: duration || 0,
+                scroll_depth: scrollDepth || 0,
+                zoom_level: zoomLevel || 1.0,
+                time_to_first_view: timeToFirstView || 0,
+                is_complete: isComplete || false
+            };
+
+            fetch('/log-view', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.message || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Page view logged:', data);
+                if (data.is_new_page) {
+                    console.log('New page viewed:', pageNumber);
+                }
+            })
+            .catch(error => {
+                console.error('Error logging page view:', error);
+                // Only retry if it's not a validation error
+                if (!error.message.includes('Missing required fields') && 
+                    !error.message.includes('Viewing session not found')) {
+                    setTimeout(() => {
+                        logPageView(pageNumber, duration, scrollDepth, zoomLevel, timeToFirstView, isComplete);
+                    }, 1000);
+                }
+            });
+        }
+
+        // Update duration for revisited pages
+        function updatePageDuration(pageNumber, duration, scrollDepth = 0) {
+            console.log('Updating duration for page:', {
+                page: pageNumber,
+                duration: duration,
+                scrollDepth: scrollDepth
+            });
+            
+            if (!viewingSessionId) {
+                console.error('No viewing session ID available');
+                return;
+            }
+            
+            const data = {
+                viewing_session_id: viewingSessionId,
+                pdf_id: "{{ pdf_id }}",
+                page: pageNumber,
+                duration: duration,
+                scroll_depth: scrollDepth,
+                zoom_level: 1.0,
+                time_to_first_view: 0,
+                is_complete: false,
+                update_duration: true
+            };
+
+            fetch('/log-view', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.message || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Page duration updated:', data);
+            })
+            .catch(error => {
+                console.error('Error updating page duration:', error);
+                // Only retry if it's not a validation error
+                if (!error.message.includes('Missing required fields') && 
+                    !error.message.includes('Viewing session not found')) {
+                    setTimeout(() => {
+                        updatePageDuration(pageNumber, duration, scrollDepth);
+                    }, 1000);
+                }
+            });
+        }
+
+        // Navigation button handlers
+        document.getElementById('nextPage').addEventListener('click', function() {
+            if (currentPage < pdfDoc.numPages) {
+                renderPage(currentPage + 1);
+            }
+        });
+
+        document.getElementById('prevPage').addEventListener('click', function() {
+            if (currentPage > 1) {
+                renderPage(currentPage - 1);
+            }
+        });
+
+        // Track scroll depth
+        window.addEventListener('scroll', function() {
+            const scrollDepth = window.scrollY / document.body.scrollHeight;
+            // You can send this to your backend if needed
+        });
+
+        // Add window unload handler to mark session as complete
+        window.addEventListener('beforeunload', function() {
+            // Get the current page data
+            const currentPageData = pageViews.get(currentPage);
+            if (currentPageData) {
+                const endTime = new Date();
+                const duration = (endTime - currentPageData.startTime) / 1000;
+                
+                // Send completion signal
+                const data = {
+                    viewing_session_id: viewingSessionId,
+                    pdf_id: "{{ pdf_id }}",
+                    page: currentPage,
+                    duration: duration,
+                    scroll_depth: 0,
+                    zoom_level: 1.0,
+                    time_to_first_view: 0,
+                    is_complete: true
+                };
+
+                // Use sendBeacon for more reliable delivery
+                navigator.sendBeacon('/log-view', JSON.stringify(data));
+            }
+        });
+    </script>
+</body>
+</html> 

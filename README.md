@@ -69,14 +69,14 @@ Make sure the database pdf_analytics exists in MySQL. You can create it manually
 CREATE DATABASE pdf_analytics;
 
 🚀 Run the Application
-python app.py
+python pdftracker.py
 
 The app will detect your local network IP and run on it, defaulting to http://<your-local-ip>:80/.
 
 📁 Project Structure
 pdf-analytics-app/
 │
-├── app.py
+├── pdftracker.py
 ├── templates/
 │   ├── admin_login.html
 │   ├── admin_dashboard.html
